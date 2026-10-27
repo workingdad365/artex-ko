@@ -689,9 +689,9 @@ func (s *Server) emitManualTaskLLMSwitch(t *Task, previousID, nextID *int64) db.
 	if nextID != nil {
 		next = s.llmAuditProfile(*nextID)
 	}
-	summary := fmt.Sprintf("用户手动将任务 LLM 从 %s 切换到 %s", llmAuditProfileLabel(previous), llmAuditProfileLabel(next))
+	summary := fmt.Sprintf("사용자가 작업 LLM을 %s에서 %s로 수동 전환했습니다", llmAuditProfileLabel(previous), llmAuditProfileLabel(next))
 	metadata, _ := json.Marshal(llmActivityMetadata{LLMTransition: llmTransitionAudit{
-		Mode: "manual", Reason: "用户手动切换任务 LLM", Previous: previous, Next: next,
+		Mode: "manual", Reason: "사용자가 작업 LLM을 수동 전환했습니다", Previous: previous, Next: next,
 	}})
 	return s.engine.emitActivity(t, db.Activity{Worker: "system", Kind: "llm_switch", Summary: summary, Detail: summary, Metadata: metadata})
 }

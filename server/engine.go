@@ -33,7 +33,7 @@ func dropReason(err error) string {
 	if errors.As(err, &pgErr) {
 		switch pgErr.Code {
 		case "23503":
-			return "fk_violation(23503,父exploration不存在)"
+			return "fk_violation(23503,상위 exploration 없음)"
 		case "23505":
 			return "unique_violation(23505)"
 		default:
@@ -80,10 +80,8 @@ var errWorkControlConflict = errors.New("work control conflict")
 // 사용자에게 그대로 노출하는 작업 제어 오류 문구다. ControlWork 의 반환 오류는
 // applyIntentControl(task_control.go) → controlIntent(server.go:1236) → writeErr 409 로,
 // runDetachedIntent 의 반환 오류는 intent_intervention.go:147 → writeErr 로 사용자 화면에
-// 뜬다. 두 경로 모두 에이전트 도구(actool) 입력에 닿지 않으므로 한국어로 바꾼다. 반대로
-// 같은 파일의 SteerWork·KillWork(steer_work·kill_work 도구 결과)와 transitionIntentState
-// (내부 상태 전이 로그) 문구는 두뇌 입력·로그라 성능 드리프트를 막기 위해 원문을 보존한다
-// (각 지점 주석 참조). 의도가 더 이상 paused 상태가 아니라는 재개 충돌 문구는 task_control.go
+// 뜬다. 도구 실행 결과와 내부 상태 전이 로그도 한국어로 표시한다.
+// 의도가 더 이상 paused 상태가 아니라는 재개 충돌 문구는 task_control.go
 // 의 errIntentCtrlStateConflictFmt 를 재사용해 단일 출처를 유지한다.
 const (
 	errWorkControlNoRunningWorkFmt = "%w: 의도 %d 에 실행 중인 Worker 가 없습니다 (이미 종료되었거나 아직 할당되지 않았을 수 있습니다)"
@@ -498,10 +496,8 @@ func transitionIntentState(store *db.ExplorationStore, intentID int64, expected,
 		return err
 	}
 	if !changed {
-		// 이 CAS 충돌 오류는 runIntent(아래 989~1156) 안에서만 쓰이고 그 함수는 bool 을
-		// 반환한다. 오류는 log.Printf 로 남기거나 흐름 제어에만 쓰여 HTTP 응답·에이전트
-		// 도구(actool)로 나가지 않으므로, 로그 성격(Z2)이라 원문을 보존한다.
-		return fmt.Errorf("%w: 意图 %d 不再是 %s 状态", db.ErrIntentStateConflict, intentID, expected)
+		// 상태 충돌 식별자는 유지하고 로그 설명은 한국어로 반환한다.
+		return fmt.Errorf("%w: 의도 %d가 더 이상 %s 상태가 아닙니다", db.ErrIntentStateConflict, intentID, expected)
 	}
 	return nil
 }
@@ -510,17 +506,15 @@ func transitionIntentState(store *db.ExplorationStore, intentID int64, expected,
 // planner's steer_work tool). The worker delivers it before its next tool call and
 // re-plans — no kill. Errors if no work is currently running that intent.
 func (e *Engine) SteerWork(intentID int64, msg string) error {
-	// SteerWork 는 planner·mainagent 의 steer_work 도구(agent/tools.go)로 배선되어, 아래 두
-	// 오류가 actool.Errorf(err.Error()) 로 에이전트에게 되돌아가는 두뇌 입력이다. 번역하면
-	// 벤치마크된 에이전트의 입력이 바뀌어 성능 드리프트 위험이 있어 원문을 보존한다.
+	// 도구 실행 오류는 활동 기록에도 표시하므로 한국어로 반환한다.
 	if strings.TrimSpace(msg) == "" {
-		return fmt.Errorf("纠偏消息不能为空")
+		return fmt.Errorf("방향 수정 메시지는 비워 둘 수 없습니다")
 	}
 	e.workMu.Lock()
 	running := e.work[intentID] != nil
 	e.workMu.Unlock()
 	if !running {
-		return fmt.Errorf("意图 %d 当前没有运行中的 work（可能已结束或未被领取）", intentID)
+		return fmt.Errorf("의도 %d에 실행 중인 work가 없습니다(이미 종료되었거나 할당되지 않았을 수 있습니다)", intentID)
 	}
 	e.steerMu.Lock()
 	e.steerBox[intentID] = append(e.steerBox[intentID], msg)
@@ -599,8 +593,8 @@ func isThinkingOnlyTurn(messages []llm.Message) bool {
 
 func (h steerHooks) PreToolUse(ctx context.Context, name string, input []byte) (bool, string, []byte) {
 	if msg, ok := h.drain(); ok {
-		return true, "【规划者实时纠偏】" + msg +
-			"\n（这是规划者对本意图的即时指令；本次工具调用未执行，请据此调整下一步。若与你当前打算冲突，以此为准。）", nil
+		return true, "[플래너 실시간 방향 수정] " + msg +
+			"\n(이 의도에 대한 플래너의 실시간 지시입니다. 이번 도구 호출은 실행되지 않았습니다. 이 지시에 따라 다음 동작을 조정하고 현재 계획과 충돌하면 이 지시를 우선합니다.)", nil
 	}
 	if h.inner != nil {
 		return h.inner.PreToolUse(ctx, name, input)
@@ -648,10 +642,8 @@ func (e *Engine) KillWork(intentID int64) error {
 	run := e.work[intentID]
 	e.workMu.Unlock()
 	if run == nil {
-		// KillWork 는 planner 의 kill_work 도구(agent/tools.go)로 배선되어, 이 오류가
-		// actool.Errorf(err.Error()) 로 에이전트에게 되돌아가는 두뇌 입력이다. SteerWork 와
-		// 같은 이유로 원문을 보존한다.
-		return fmt.Errorf("意图 %d 当前没有运行中的 work（可能已结束或未被领取）", intentID)
+		// 종료 도구의 실행 오류를 한국어로 반환한다.
+		return fmt.Errorf("의도 %d에 실행 중인 work가 없습니다(이미 종료되었거나 할당되지 않았을 수 있습니다)", intentID)
 	}
 	run.cancel(agent.AbortKilledByPlanner)
 	return nil

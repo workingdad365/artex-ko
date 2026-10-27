@@ -251,13 +251,10 @@ type evidencePreview struct {
 	Binary     bool   `json:"binary"`
 }
 
-// readEvidencePreview 는 HTTP 핸들러와 에이전트 도구(toolGetFindingTraffic)가 함께
-// 쓰는 공유 헬퍼다. 아래 두 errors.New 와 이진 본문 플레이스홀더(Content)는 에이전트
-// 도구 결과(actool.Errorf·body 콘텐츠)로 되먹여져 두뇌 입력이 되므로, 성능 드리프트를
-// 피하려고 중국어 원문을 보존한다(F16 두뇌 경계 계열 — 표시/입력 분리는 별도 결정 대기).
+// HTTP와 도구가 공유하는 미리보기이며 오류와 이진 본문 안내는 한국어로 제공한다.
 func readEvidencePreview(store *evidence.Store, snapshot db.TrafficEvidenceSnapshot, side string, offset, length int64) (out evidencePreview, err error) {
 	if offset < 0 || length < 0 {
-		return out, errors.New("offset / length 不能为负数")
+		return out, errors.New("offset / length는 음수일 수 없습니다")
 	}
 	if length == 0 || length > 8192 {
 		length = 8192
@@ -268,7 +265,7 @@ func readEvidencePreview(store *evidence.Store, snapshot db.TrafficEvidenceSnaps
 	}
 	defer f.Close()
 	if offset > total {
-		return out, errors.New("offset 超出正文长度")
+		return out, errors.New("offset이 본문 길이를 초과합니다")
 	}
 	if _, err = f.Seek(offset, io.SeekStart); err != nil {
 		return out, err
@@ -291,7 +288,7 @@ func readEvidencePreview(store *evidence.Store, snapshot db.TrafficEvidenceSnaps
 	out = evidencePreview{Offset: offset, Total: total, NextOffset: offset + int64(len(raw)), Truncated: offset+int64(len(raw)) < total,
 		Binary: bytes.IndexByte(raw, 0) >= 0 || (offset == 0 && !utf8.Valid(raw))}
 	if out.Binary {
-		out.Content = fmt.Sprintf("[二进制正文，%d 字节；请下载查看]", total)
+		out.Content = fmt.Sprintf("[바이너리 본문, %d바이트; 다운로드하여 확인]", total)
 	} else {
 		out.Content = string(bytes.ToValidUTF8(raw, []byte("�")))
 	}

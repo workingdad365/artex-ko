@@ -19,6 +19,31 @@ func TestParseVerdict(t *testing.T) {
 	}
 }
 
+func TestKoreanVerdictContract(t *testing.T) {
+	prompt := EffectiveJudgePrompt(DefaultJudgePrompt)
+	if !strings.HasSuffix(prompt, JudgeKoreanOutputContract) || EffectiveJudgePrompt(prompt) != prompt {
+		t.Fatal("Korean output contract must be last and idempotent")
+	}
+	for _, action := range []string{"allow", "ask", "deny"} {
+		reason := "실제 작업: report.md 읽기; 성공 시 결과: 기존 내용 반환; 적용 규칙: A5"
+		raw, _ := json.Marshal(map[string]string{"decision": action, "comment": reason})
+		if got := ParseVerdict(string(raw)); got.Action != action || got.Reason != reason {
+			t.Fatalf("lost Korean verdict: %+v", got)
+		}
+		for _, incomplete := range []string{
+			"실제 작업: ; 성공 시 결과: 내용 반환; 적용 규칙: A5",
+			"실제 작업: 읽기; 성공 시 결과: ; 적용 규칙: A5",
+			"실제 작업: 읽기; 성공 시 결과: 내용 반환; 적용 규칙: ",
+			"실제 작업: 읽기; 성공 시 결과: 내용 반환",
+		} {
+			raw, _ = json.Marshal(map[string]string{"decision": action, "comment": incomplete})
+			if got := ParseVerdict(string(raw)); got.Action != "" {
+				t.Fatalf("accepted incomplete Korean verdict: %+v", got)
+			}
+		}
+	}
+}
+
 func TestParseVerdictRejectsIncompleteOrAmbiguousReplies(t *testing.T) {
 	valid := `{"decision":"allow","comment":"实际操作：读取文件；成功后的后果：返回内容；命中规则：A5"}`
 	for _, reply := range []string{

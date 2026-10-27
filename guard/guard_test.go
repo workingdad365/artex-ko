@@ -3,6 +3,7 @@ package guard
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/Autumn-27/norma/hook"
@@ -36,18 +37,23 @@ func TestPreToolUsePassthrough(t *testing.T) {
 	}
 }
 
-// TestSystemBlockMessagePreservedIsBrainInput pins the platform-governance framing
-// (systemBlockMessage) to its original Chinese bytes. That framing is the model-facing
-// tool_result that steers the pentest agent away from bypassing an intercept block
-// (see guard.go doc comment + the F14 보존 판단). For the ask-block paths the same
-// framed string also lands in the /api/audit record via g.record, so one string serves
-// both the agent input and the audit display — it must NOT be translated, or benchmarked
-// agent behavior could drift. This test fails if the framing is accidentally localized.
-func TestSystemBlockMessagePreservedIsBrainInput(t *testing.T) {
-	got := systemBlockMessage("<原因>")
-	want := "【ARTEX 平台管控·非目标防御】此调用被平台拦截。原因：<原因>。此操作被禁止。"
-	if got != want {
-		t.Errorf("systemBlockMessage framing drifted (F14 두뇌 보존 — 원문 유지해야 함):\n got %q\nwant %q", got, want)
+// 원본 탐지 마커와 플랫폼 차단 의미를 유지하고 API 표시는 한국어로 제공한다.
+func TestSystemBlockMessageKoreanDisplay(t *testing.T) {
+	got := systemBlockMessage("[模型] 테스트 사유")
+	if !strings.HasPrefix(got, platformBlockMarker) || !strings.Contains(got, "대상 시스템의 방어가 아닌 플랫폼 정책") {
+		t.Fatalf("missing platform framing: %q", got)
+	}
+	g := New()
+	g.block("Bash", got, "")
+	shown := g.Audit()[0].Reason
+	if strings.Contains(shown, platformBlockMarker) || strings.Contains(shown, "[模型]") || !strings.Contains(shown, "[모델] 테스트 사유") || shown != DisplayMessage(got) {
+		t.Fatalf("invalid display: %q", shown)
+	}
+	if g.audit[0].Reason != got || DisplayMessage("HTTP/1.1 403 Forbidden [模型]") != "HTTP/1.1 403 Forbidden [模型]" {
+		t.Fatal("raw audit or target evidence was changed")
+	}
+	if DisplayMessage("Blocked by hook: "+got) != shown {
+		t.Fatal("SDK hook wrapper bypassed display translation")
 	}
 }
 

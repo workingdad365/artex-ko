@@ -14,24 +14,8 @@ import (
 	actool "github.com/Autumn-27/norma/tool"
 )
 
-// 현지화 보존 판정(artex-global): 이 파일의 중국어 문자열은 전부 에이전트(두뇌) 입력이고
-// HTTP 사용자 응답으로 나가지 않는다. BRIEF 경계 #1(두뇌는 번역하지 않는다 — 성능
-// 보존)에 따라 원문을 그대로 둔다. 이 파일에 writeErr 는 0 — 사용자 노출 경로가 없다.
-// 싱크는 세 갈래다(행 번호 대신 심볼로 가리킨다. 편집으로 밀려도 유효하게).
-//
-//	(1) 도구 설명·스키마 description: report_finding 의 evidence_hint_id·hints.text,
-//	    bind_finding_traffic 의 wrTool 설명·finding_id strParam. LLM 이 읽는 도구
-//	    정의라 두뇌 입력이다.
-//	(2) 마이그레이션 매칭 문자열: seedFindingWorkflowTools 의 legacy 변수(옛 traffic_search
-//	    설명)는 traffic.TrafficSearchDescription(그 자체도 중국어 도구 설명)으로 올리는
-//	    UPDATE … WHERE description=$2 의 비교값이다. 번역하면 기존 행과 매칭되지 않아
-//	    업그레이드가 멈춘다.
-//	(3) actool.Errorf 도구 결과: agentFindingTrafficAccess 의 오류들은 유일 호출처
-//	    toolBindFindingTraffic(이 파일)과 get_finding_traffic(finding_traffic.go) 두
-//	    도구에서 모두 actool.Errorf(err.Error()) 로 감싸 에이전트에게 되돌아가고,
-//	    toolBindFindingTraffic 의 바인딩 비활성·빈 traffic_refs 문구는 직접 actool.Errorf 다.
-//
-// 다음 기여자가 "마저 번역"하다 벤치마크된 두뇌 입력을 바꾸지 않도록 둔다(F16 계열).
+// 도구 정의와 마이그레이션 비교값은 원문을 유지하며 설명은 웹 카탈로그에서 번역한다.
+// 도구 오류는 활동 기록에도 표시하므로 한국어로 반환한다.
 func (s *Server) seedFindingWorkflowTools() {
 	const hostSearchDescriptionFlag = "finding_workflow_tools_v3_host_search_description"
 	if value, _, _ := s.m.pg.GetSetting(hostSearchDescriptionFlag); value != "true" {
@@ -135,26 +119,26 @@ func objectProperty(parent map[string]any, key string) map[string]any {
 
 func (s *Server) agentFindingTrafficAccess(ctx context.Context, id int64, write bool) error {
 	if id <= 0 {
-		return errors.New("finding_id 必须为独立漏洞记录 ID；不是探索节点 ID")
+		return errors.New("finding_id는 탐색 노드 ID가 아닌 독립 취약점 기록 ID여야 합니다")
 	}
 	f, err := s.m.pg.GetFinding(id)
 	if err != nil {
 		return err
 	}
 	if f == nil {
-		return fmt.Errorf("%w：finding_id=%d。证据工具使用独立漏洞记录 ID，请从 list_task_findings / get_task_node_detail 的 finding_id 字段读取；不要传 id / finding_node_id", db.ErrFindingNotFound, id)
+		return fmt.Errorf("%w: finding_id=%d. 증거 도구는 독립 취약점 기록 ID를 사용합니다. list_task_findings / get_task_node_detail의 finding_id 필드를 사용하고 id / finding_node_id를 전달하면 안 됩니다", db.ErrFindingNotFound, id)
 	}
 	if ri := agent.RunInfoFrom(ctx); ri.TaskID > 0 {
 		task := s.m.ResolveTask(strconv.FormatInt(ri.TaskID, 10))
 		if task == nil {
-			return errors.New("任务不存在")
+			return errors.New("작업이 없습니다")
 		}
 		_, inherited, allowed := findingProvenanceInTask(task, f.TaskID)
 		if !allowed {
-			return errors.New("当前任务不可读取该漏洞")
+			return errors.New("현재 작업에서 해당 취약점을 읽을 수 없습니다")
 		}
 		if write && inherited {
-			return errors.New("继承漏洞的流量证据只读，请到来源任务修改")
+			return errors.New("상속한 취약점의 트래픽 증거는 읽기 전용입니다. 원본 작업에서 수정해야 합니다")
 		}
 	}
 	return nil
@@ -165,7 +149,7 @@ func (s *Server) toolBindFindingTraffic() actool.CoreTool {
 		objSchema(map[string]any{"finding_id": strParam("独立漏洞记录 ID，从 list_task_findings / get_task_node_detail 的 finding_id 字段读取"), "traffic_refs": agent.HintTrafficSchema()}, "finding_id", "traffic_refs"),
 		func(ctx context.Context, raw json.RawMessage) (actool.Result, error) {
 			if !s.m.pg.GetBool(settingAgentTrafficBinding, false) {
-				return actool.Errorf("Agent 自动绑定流量已关闭；请在系统设置开启，或使用页面人工绑定。"), nil
+				return actool.Errorf("Agent의 트래픽 자동 연결이 꺼져 있습니다. 시스템 설정에서 켜거나 화면에서 수동으로 연결해야 합니다."), nil
 			}
 			var args struct {
 				FindingID json.RawMessage `json:"finding_id"`
@@ -179,7 +163,7 @@ func (s *Server) toolBindFindingTraffic() actool.CoreTool {
 				return actool.Errorf(err.Error()), nil
 			}
 			if len(args.Refs) == 0 {
-				return actool.Errorf("补绑需要至少一条已核实的 traffic_refs；无流量无需调用此工具"), nil
+				return actool.Errorf("추가 연결에는 검증된 traffic_refs가 하나 이상 필요합니다. 트래픽이 없으면 이 도구를 호출할 필요가 없습니다"), nil
 			}
 			list, err := s.evidenceStore().Bind(ctx, id, args.Refs)
 			if err != nil {

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"io"
 	"strings"
+
+	"github.com/Autumn-27/artex/config"
 )
 
 // The application owns the envelope contract, including for saved custom prompts.
@@ -24,8 +26,20 @@ func EffectiveJudgePrompt(prompt string) string {
 	if !strings.Contains(prompt, JudgeOutputContract) {
 		prompt += "\n\n" + JudgeOutputContract
 	}
+	if config.ActiveLanguage() == "ko" && !strings.Contains(prompt, JudgeKoreanOutputContract) {
+		prompt += "\n\n" + JudgeKoreanOutputContract
+	}
 	return prompt
 }
+
+// 한국어 출력 계약은 판정 정책과 JSON 키를 유지하면서 설명 언어만 지정한다.
+const JudgeKoreanOutputContract = `# 한국어 판정 설명(앞선 출력 언어 및 예시보다 우선)
+decision은 allow, ask, deny 중 하나이며 기존 정책에 따라 판단한다. JSON 키는 decision과 comment만 사용한다.
+comment는 반드시 한국어로 "실제 작업: ...; 성공 시 결과: ...; 적용 규칙: ..." 형식으로 작성한다. 세 항목 모두 비워 두지 않고 각각 한 문장으로 간결하게 작성하며 전체 240자 이내로 제한한다.
+실제 작업은 현재 tool_name과 arguments가 실행할 동작만 설명한다. 배경의 계획이나 파일에 쓰는 예시를 실행된 동작으로 간주하지 않는다.
+성공 시 결과는 호출 성공 시의 직접 효과이며 이미 성공했다고 단정하지 않는다. 적용 규칙은 실제 정책의 식별자(A1-A6, D1-D6, ASK, DEFAULT 또는 사용자 규칙)를 그대로 사용한다.
+명령, 경로, 식별자와 인용한 증거 원문은 그대로 유지한다. JSON 밖에 설명이나 코드 펜스를 출력하지 않는다.
+예시: {"decision":"allow","comment":"실제 작업: report.md 읽기; 성공 시 결과: 기존 파일 내용 반환; 적용 규칙: A5"}`
 
 // Output is an application contract, also applied to saved custom policies.
 // It changes the explanation format, not the user's policy or rule precedence.
@@ -190,16 +204,26 @@ func ParseVerdict(text string) Verdict {
 	if action != "allow" && action != "ask" && action != "deny" {
 		return Verdict{}
 	}
-	if len(reason) > 2400 || !strings.HasPrefix(reason, "实际操作：") {
+	if len(reason) > 2400 {
 		return Verdict{}
 	}
-	operation, rest, ok := strings.Cut(strings.TrimPrefix(reason, "实际操作："), "；成功后的后果：")
-	if !ok || strings.TrimSpace(operation) == "" {
-		return Verdict{}
+	// 기존 저장 프롬프트의 중국어 계약도 계속 검증한다.
+	for _, labels := range [][3]string{
+		{"실제 작업:", "; 성공 시 결과:", "; 적용 규칙:"},
+		{"实际操作：", "；成功后的后果：", "；命中规则："},
+	} {
+		if !strings.HasPrefix(reason, labels[0]) {
+			continue
+		}
+		operation, rest, ok := strings.Cut(strings.TrimPrefix(reason, labels[0]), labels[1])
+		if !ok || strings.TrimSpace(operation) == "" {
+			return Verdict{}
+		}
+		consequence, rule, ok := strings.Cut(rest, labels[2])
+		if !ok || strings.TrimSpace(consequence) == "" || strings.TrimSpace(rule) == "" {
+			return Verdict{}
+		}
+		return Verdict{Action: action, Reason: reason}
 	}
-	consequence, rule, ok := strings.Cut(rest, "；命中规则：")
-	if !ok || strings.TrimSpace(consequence) == "" || strings.TrimSpace(rule) == "" {
-		return Verdict{}
-	}
-	return Verdict{Action: action, Reason: reason}
+	return Verdict{}
 }

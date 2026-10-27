@@ -392,11 +392,8 @@ func NewManager(dir, proxyAddr string) (*Manager, error) {
 		} else {
 			err = tr.RecoverHostDeleteStages(func(_ int64, taskID int64) (bool, error) {
 				if taskID <= 0 {
-					// 기동 중 트래픽 복구 콜백의 내부 정합 오류다. NewManager 가
-					// fmt.Errorf("recover traffic delete staging: %w", err) 로 감싸 기동 실패로
-					// 전파할 뿐 writeErr·actool 어느 경로에도 닿지 않는 운영자 기동 로그라,
-					// F3b(사용자 노출 writeErr) 범위가 아니어서 원문을 보존한다(Z2 계열).
-					return false, errors.New("归档流量暂存日志缺少任务 ID")
+					// 기동 중 트래픽 복구 오류를 운영자 로그에 한국어로 전달한다.
+					return false, errors.New("보관 트래픽 임시 저장 로그에 작업 ID가 없습니다")
 				}
 				task, taskErr := pg.GetTask(taskID)
 				if taskErr != nil {

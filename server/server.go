@@ -39,9 +39,8 @@ import (
 // Defaults to "dev" for local builds. Exposed to the frontend via GET /api/health.
 var BuildVersion = "dev"
 
-// 사용자에게 노출되는 writeErr 응답 문구(한국어). 에이전트에 전달되는 프롬프트·도구
-// 설명·payload·로그는 원문을 보존하고, HTTP 핸들러가 writeErr/fmt.Errorf 로 내보내는
-// 최종 사용자 응답만 한국어로 둔다. (F3b, 번역어는 완료 파일·web i18n 과 동일 표기)
+// 사용자에게 노출되는 HTTP 오류 응답 문구를 한국어로 제공한다.
+// 모델 프롬프트와 명령, 페이로드, 증거 원문은 유지한다.
 const (
 	// 의도 제어·재실행 (controlIntent / rerunIntent / rerunBlocked)
 	errTaskDeletingIntentControl = "작업을 삭제하는 중이라 의도를 제어할 수 없습니다"
@@ -1576,7 +1575,7 @@ func (s *Server) createTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.TrimSpace(req.Description) == "" {
-		req.Description = "未命名任务"
+		req.Description = "이름 없는 작업"
 	}
 	if len(req.LLMProfileIDs) == 0 && req.LLMProfileID != nil {
 		req.LLMProfileIDs = []int64{*req.LLMProfileID}
@@ -1823,7 +1822,7 @@ func (s *Server) seed(t *Task, text string) {
 // origin fact (RelDerivedFrom) so it still traces back to a fact node. Best-effort —
 // a failure just falls back to the normal planner-driven flow.
 func (s *Server) seedFirstIntent(t *Task) {
-	summary := fmt.Sprintf("完成任务目标：%s（任务：%s）", t.Goal, t.Description)
+	summary := fmt.Sprintf("작업 목표 달성: %s(작업: %s)", t.Goal, t.Description)
 	id, err := t.Store.AddIntent(map[string]any{"summary": summary}, 8, nil, "seed")
 	if err != nil {
 		log.Printf("[seed] 작업 %s: 초기 의도 등록 실패: %v", t.ID, err)

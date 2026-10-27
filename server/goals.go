@@ -197,8 +197,8 @@ func (s *Server) admitTaskWhen(t *Task, mode string, requirePaused bool) (queued
 	// this ordering, its already-running worker loops can claim the newly-opened
 	// intent in the gap between status=running and queued=true.
 	if shouldQueue || wasTerminal || wasPaused || wasQueued {
-		s.engine.Pause(t.ID, agent.Causef("queued_for_admission", "任务等待运行准入",
-			"任务正在等待并发队列或准入状态提交，本次执行已停止；只有获得运行槽后才会重新领取意图"))
+		s.engine.Pause(t.ID, agent.Causef("queued_for_admission", "작업이 실행 허가를 기다리고 있습니다",
+			"작업이 동시 실행 대기열 또는 실행 허가 상태 저장을 기다리며 이번 실행은 중지되었습니다. 실행 슬롯을 얻은 뒤 의도를 다시 할당합니다"))
 	}
 
 	status := lifecycle.Status
@@ -286,8 +286,8 @@ func (s *Server) reconcileConcurrency() {
 				continue
 			}
 			mode := s.resumeAdmissionMode(task)
-			s.engine.Pause(task.ID, agent.Causef("llm_unavailable_queued", "LLM 不可用，任务进入等待队列",
-				"任务当前无法解析可运行的 Planner/Worker LLM，已释放并发槽；配置恢复后按队列顺序继续"))
+			s.engine.Pause(task.ID, agent.Causef("llm_unavailable_queued", "LLM을 사용할 수 없어 작업이 대기열에 들어갔습니다",
+				"실행 가능한 Planner/Worker LLM을 찾지 못해 동시 실행 슬롯을 해제했습니다. 설정이 복구되면 대기열 순서대로 계속 진행합니다"))
 			if err := s.m.EnqueueTask(task.ID, mode); err != nil {
 				s.engine.Resume(task)
 				log.Printf("[concurrency] 작업 %s LLM 사용 불가에 따른 대기열 등록 실패: %v", task.ID, err)

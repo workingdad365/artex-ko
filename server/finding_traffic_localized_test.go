@@ -9,9 +9,8 @@ import "testing"
 // 끝까지 돌 수 없으므로 상수 자체를 핀 고정한다(goals_api·notify_api 의 DB 게이트
 // 경로와 같은 방식). 누군가 이 리터럴을 중국어로 되돌리면 이 테스트가 실패한다.
 //
-// readEvidencePreview 의 errors.New(offset/length 검증)·이진 본문 플레이스홀더와
-// roTool("get_finding_traffic") 도구 설명은 에이전트 도구 결과로 되먹여지는 두뇌
-// 입력이라 의도적으로 원문(중국어)을 보존하며, 이 테스트의 단언 대상이 아니다.
+// readEvidencePreview의 오류와 이진 본문 안내도 한국어로 제공한다.
+// 모델용 도구 정의는 유지하고 웹 카탈로그에서 설명을 번역한다.
 func TestFindingTrafficErrorsLocalized(t *testing.T) {
 	for _, c := range []struct {
 		label, msg string

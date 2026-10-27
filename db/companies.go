@@ -74,7 +74,7 @@ func ValidateCompanyScopeInputBounds(inputs []ScopeInput) error {
 	for i, input := range inputs {
 		if utf8.RuneCountInString(input.Value) > MaxCompanyScopeRawRunes {
 			return &CompanyScopeValidationError{Message: fmt.Sprintf(
-				"企业范围第 %d 条原始值过长: 最多 %d 个字符", i+1, MaxCompanyScopeRawRunes,
+				"기업 범위 %d번째 원본 값이 너무 깁니다: 최대 %d자", i+1, MaxCompanyScopeRawRunes,
 			)}
 		}
 	}
@@ -372,7 +372,7 @@ func (s *CompanyStore) AddScopeInputsChecked(companyID int64, inputs []ScopeInpu
 	if needsAttribution {
 		warning, err := recomputeAttributionTx(tx)
 		if err != nil {
-			return 0, 0, invalid, errors, fmt.Errorf("重新计算企业归属失败: %w", err)
+			return 0, 0, invalid, errors, fmt.Errorf("기업 소속 재계산 실패: %w", err)
 		}
 		logAttributionWarning(warning)
 	}
@@ -400,12 +400,12 @@ func validateParsedScopeBounds(rules []ParsedScope) error {
 	for i, rule := range rules {
 		if utf8.RuneCountInString(rule.Raw) > MaxCompanyScopeRawRunes {
 			return &CompanyScopeValidationError{Message: fmt.Sprintf(
-				"企业范围第 %d 条原始值过长: 最多 %d 个字符", i+1, MaxCompanyScopeRawRunes,
+				"기업 범위 %d번째 원본 값이 너무 깁니다: 최대 %d자", i+1, MaxCompanyScopeRawRunes,
 			)}
 		}
 		if utf8.RuneCountInString(rule.Value) > MaxCompanyScopeValueRunes {
 			return &CompanyScopeValidationError{Message: fmt.Sprintf(
-				"企业范围第 %d 条规范化值过长: 最多 %d 个字符", i+1, MaxCompanyScopeValueRunes,
+				"기업 범위 %d번째 정규화 값이 너무 깁니다: 최대 %d자", i+1, MaxCompanyScopeValueRunes,
 			)}
 		}
 	}
@@ -670,7 +670,7 @@ func (s *CompanyStore) UpdateScopeInputsChecked(companyID int64, inputs []ScopeI
 	rules, invalid, errs := parseScopeInputs(inputs)
 	if invalid > 0 {
 		return 0, invalid, errs, &CompanyScopeValidationError{Message: fmt.Sprintf(
-			"企业范围包含 %d 条无效规则，未覆盖原有范围", invalid,
+			"기업 범위에 잘못된 규칙 %d개가 있어 기존 범위를 덮어쓰지 않았습니다", invalid,
 		)}
 	}
 	if err := validateParsedScopeBounds(rules); err != nil {
@@ -698,7 +698,7 @@ func (s *CompanyStore) UpdateScopeInputsChecked(companyID int64, inputs []ScopeI
 	// detach scope-derived assets or expose a lower-precedence company match.
 	warning, err := recomputeAttributionTx(tx)
 	if err != nil {
-		return 0, invalid, errs, fmt.Errorf("重新计算企业归属失败: %w", err)
+		return 0, invalid, errs, fmt.Errorf("기업 소속 재계산 실패: %w", err)
 	}
 	logAttributionWarning(warning)
 	if err := tx.Commit(); err != nil {

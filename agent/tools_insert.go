@@ -56,7 +56,7 @@ func assetInputLabel(item assetInputItem) string {
 	case strings.TrimSpace(item.ServiceIP) != "":
 		target = strings.TrimSpace(item.ServiceIP)
 	default:
-		target = "(未知)"
+		target = "(알 수 없음)"
 	}
 	if typ != "" {
 		return fmt.Sprintf("[%s] %s", typ, target)
@@ -202,7 +202,7 @@ func (t *ToolSet) insertAssets() actool.CoreTool {
 		}, "assets"),
 		func(_ context.Context, in json.RawMessage) (actool.Result, error) {
 			if t.as == nil {
-				return actool.Errorf("insert_assets 未启用: AssetStore 未初始化"), nil
+				return actool.Errorf("insert_assets 비활성화: AssetStore가 초기화되지 않았습니다"), nil
 			}
 			var a struct {
 				Assets []assetInputItem `json:"assets"`
@@ -244,7 +244,7 @@ func (t *ToolSet) insertAssets() actool.CoreTool {
 				if d := db.EvaluateAssetGate(blockRules, allowRules, domains, ips, urls); !d.Allowed {
 					errs = append(errs, errEntry{
 						Index: i,
-						Error: fmt.Sprintf("资产 %s %s，已禁止插入", assetInputLabel(item), d.Reason),
+						Error: fmt.Sprintf("자산 %s %s, 등록이 차단되었습니다", assetInputLabel(item), d.Reason),
 					})
 					continue
 				}
@@ -346,9 +346,9 @@ func (t *ToolSet) insertAssets() actool.CoreTool {
 						nodeID := t.ownerNode
 						sourceNodeID = &nodeID
 					}
-					summary := "Agent 通过 insert_assets 登记"
+					summary := "Agent가 insert_assets로 등록"
 					if t.ownerNode > 0 {
-						summary = fmt.Sprintf("Worker 意图 #%d 通过 insert_assets 登记", t.ownerNode)
+						summary = fmt.Sprintf("Worker 의도 #%d가 insert_assets로 등록", t.ownerNode)
 					}
 					_ = t.as.SetTaskAssetSource(taskID, id, "agent", summary, sourceNodeID)
 				}
@@ -390,7 +390,7 @@ func (t *ToolSet) addCompanyScope() actool.CoreTool {
 		}, "company", "scope"),
 		func(_ context.Context, in json.RawMessage) (actool.Result, error) {
 			if t.cs == nil {
-				return actool.Errorf("add_company_scope 未启用: CompanyStore 未初始化"), nil
+				return actool.Errorf("add_company_scope 비활성화: CompanyStore가 초기화되지 않았습니다"), nil
 			}
 			var a struct {
 				Company string `json:"company"`
@@ -402,11 +402,11 @@ func (t *ToolSet) addCompanyScope() actool.CoreTool {
 				return actool.Errorf(err.Error()), nil
 			}
 			if strings.TrimSpace(a.Company) == "" {
-				return actool.Errorf("company 不能为空"), nil
+				return actool.Errorf("company는 비워 둘 수 없습니다"), nil
 			}
 			companyID, _, err := t.cs.UpsertCompany(a.Company, a.Logo)
 			if err != nil {
-				return actool.Errorf("创建/获取公司失败: " + err.Error()), nil
+				return actool.Errorf("기업 생성/조회 실패: " + err.Error()), nil
 			}
 			lines := splitLines(a.Scope)
 			added, skipped, invalid, errMsgs := t.cs.AddScope(companyID, lines, a.Reason)
@@ -444,10 +444,10 @@ func (t *ToolSet) addTaskScope() actool.CoreTool {
 		}),
 		func(_ context.Context, in json.RawMessage) (actool.Result, error) {
 			if t.as == nil {
-				return actool.Errorf("add_task_scope 未启用: AssetStore 未初始化"), nil
+				return actool.Errorf("add_task_scope 비활성화: AssetStore가 초기화되지 않았습니다"), nil
 			}
 			if t.taskID <= 0 {
-				return actool.Errorf("add_task_scope 需要任务上下文(当前无 task)"), nil
+				return actool.Errorf("add_task_scope에는 작업 컨텍스트가 필요합니다(현재 task 없음)"), nil
 			}
 			type scopeEntry struct {
 				Kind  string `json:"kind"`
@@ -497,10 +497,10 @@ func (t *ToolSet) listUntestedAssets() actool.CoreTool {
 		}),
 		func(_ context.Context, in json.RawMessage) (actool.Result, error) {
 			if t.as == nil {
-				return actool.Errorf("list_untested_assets 未启用: AssetStore 未初始化"), nil
+				return actool.Errorf("list_untested_assets 비활성화: AssetStore가 초기화되지 않았습니다"), nil
 			}
 			if t.taskID <= 0 || t.ts == nil {
-				return actool.Errorf("list_untested_assets 需要任务上下文"), nil
+				return actool.Errorf("list_untested_assets에는 작업 컨텍스트가 필요합니다"), nil
 			}
 			var a struct {
 				Type     string `json:"type"`
@@ -545,7 +545,7 @@ func (t *ToolSet) listAssets() actool.CoreTool {
 		}),
 		func(_ context.Context, in json.RawMessage) (actool.Result, error) {
 			if t.as == nil {
-				return actool.Errorf("list_assets 未启用: AssetStore 未初始化"), nil
+				return actool.Errorf("list_assets 비활성화: AssetStore가 초기화되지 않았습니다"), nil
 			}
 			var a struct {
 				DSL    string  `json:"dsl"`
@@ -570,10 +570,10 @@ func (t *ToolSet) listAssets() actool.CoreTool {
 			case a.DSL != "":
 				assets, err = t.as.QueryDSLInScope(a.DSL, a.Type, t.taskID, a.Limit, a.Offset)
 			default:
-				return actool.Errorf("未传 id/ids 时 dsl 不能为空：不允许无条件查询全部资产，请提供查询条件"), nil
+				return actool.Errorf("id/ids가 없으면 dsl을 비워 둘 수 없습니다. 조건 없이 전체 자산을 조회할 수 없으므로 검색 조건을 지정해야 합니다"), nil
 			}
 			if err != nil {
-				return actool.Errorf("DSL 错误: " + err.Error()), nil
+				return actool.Errorf("DSL 오류: " + err.Error()), nil
 			}
 			return jsonResult(map[string]any{
 				"count":  len(assets),
@@ -595,7 +595,7 @@ func (t *ToolSet) listCompanies() actool.CoreTool {
 		}),
 		func(_ context.Context, in json.RawMessage) (actool.Result, error) {
 			if t.cs == nil {
-				return actool.Errorf("list_companies 未启用: CompanyStore 未初始化"), nil
+				return actool.Errorf("list_companies 비활성화: CompanyStore가 초기화되지 않았습니다"), nil
 			}
 			var a struct {
 				Search string `json:"search"`
@@ -603,7 +603,7 @@ func (t *ToolSet) listCompanies() actool.CoreTool {
 			_ = json.Unmarshal(in, &a)
 			cos, err := t.cs.ListCompanies()
 			if err != nil {
-				return actool.Errorf("查询公司失败: " + err.Error()), nil
+				return actool.Errorf("기업 조회 실패: " + err.Error()), nil
 			}
 			q := strings.ToLower(strings.TrimSpace(a.Search))
 			type companyOut struct {
