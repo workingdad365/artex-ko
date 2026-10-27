@@ -17,9 +17,7 @@ const maxChatMentions = 10
 
 // User-facing @멘션(인용) error messages surfaced through the HTTP API, localized
 // to Korean (BRIEF 현지화 방침). 用語: 引用→인용(UI mentionTextarea 네임스페이스
-// 정합). 보존 대상은 여기 없다: 와이어 토큰 라벨(chatMentionPattern·
-// chatMentionKinds)과 에이전트 입력 스냅샷 헤더·절단 표시(composeChatMentionMessage
-// 안)는 표시 문구가 아니라 두뇌 입력 형식이라 원문 그대로 둔다.
+// 정합). 스냅샷 헤더와 절단 표시는 모델 입력 전용이며 원문을 유지한다.
 const (
 	errChatMentionBadID       = "인용 ID 가 올바르지 않습니다. 다시 선택해 주세요"
 	errChatMentionTooMany     = "메시지 한 건에는 레코드를 최대 10개까지 인용할 수 있습니다"
@@ -30,9 +28,7 @@ const (
 )
 
 // chatMentionKindLabel: 사용자 노출 오류에서만 쓰는 표시 전용 한국어 라벨.
-// UI `mentionTextarea.kind.*` 와 같은 용어를 쓴다. 와이어 토큰(chatMentionPattern·
-// chatMentionKinds)과 에이전트 입력(ref.Name, composeChatMentionMessage 안)은
-// 중국어 라벨을 그대로 유지한다 — 프론트 멘션 칩 표시 i18n(F30)과 분리된 별건.
+// UI mentionTextarea.kind와 같은 용어를 사용하며 토큰은 한국어와 기존 중국어를 모두 읽는다.
 var chatMentionKindLabel = map[string]string{
 	"finding": "취약점", "asset": "자산", "company": "기업", "endpoint": "엔드포인트",
 	"ip": "IP", "app": "앱", "root_domain": "도메인", "subdomain": "서브도메인", "service": "서비스",
@@ -40,8 +36,10 @@ var chatMentionKindLabel = map[string]string{
 
 // The visible token survives drafts, uploads, retries and conversation history.
 // Labels are only for display: the server trusts only the type and numeric ID.
-var chatMentionPattern = regexp.MustCompile(`@\[(漏洞|资产|企业|接口|IP|应用|域名|子域名|服务)#([0-9]+)(?: [^\]\r\n]*)?\]`)
+var chatMentionPattern = regexp.MustCompile(`@\[(취약점|자산|기업|엔드포인트|앱|도메인|서브도메인|서비스|漏洞|资产|企业|接口|IP|应用|域名|子域名|服务)#([0-9]+)(?: [^\]\r\n]*)?\]`)
 var chatMentionKinds = map[string]string{
+	"취약점": "finding", "자산": "asset", "기업": "company", "엔드포인트": "endpoint",
+	"앱": "app", "도메인": "root_domain", "서브도메인": "subdomain", "서비스": "service",
 	"漏洞": "finding", "资产": "asset", "企业": "company", "接口": "endpoint",
 	"IP": "ip", "应用": "app", "域名": "root_domain", "子域名": "subdomain", "服务": "service",
 }

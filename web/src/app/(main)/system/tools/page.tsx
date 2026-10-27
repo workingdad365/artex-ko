@@ -3,7 +3,7 @@
 import * as React from "react";
 
 import { PlayIcon, PlusIcon, RotateCcwIcon, SaveIcon, SearchIcon, Trash2Icon } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +18,9 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { useAgentLabels } from "@/lib/agent-i18n";
 import { api } from "@/lib/api";
+import { toolText, toolTextForSave } from "@/lib/tool-i18n";
 import type { Agent, Tool } from "@/lib/types";
 
 // Traffic tools are host tools gated by the global 流量捕获 switch: bindable, but
@@ -96,7 +98,7 @@ function coerceDefault(type: string, raw: string): unknown {
 
 // applyRows writes edited rows back into a deep-copied schema (structure untouched).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function applyRows(schema: Record<string, any>, rows: ParamRow[]): Record<string, any> {
+function applyRows(schema: Record<string, any>, rows: ParamRow[], locale: string): Record<string, any> {
   const next = structuredClone(schema ?? {});
   const props = (next.properties ?? {}) as Record<string, Record<string, unknown>>;
   for (const r of rows) {
@@ -106,7 +108,7 @@ function applyRows(schema: Record<string, any>, rows: ParamRow[]): Record<string
       const parent = props[r.parentKey] as any;
       const subP = parent?.items?.properties?.[r.name] as Record<string, unknown> | undefined;
       if (!subP) continue;
-      subP.description = r.description;
+      subP.description = toolTextForSave(r.description, String(subP.description ?? ""), locale);
       if (r.scalar) {
         const dv = coerceDefault(r.type, r.defaultStr);
         if (dv === undefined) delete subP.default;
@@ -115,7 +117,7 @@ function applyRows(schema: Record<string, any>, rows: ParamRow[]): Record<string
     } else {
       const p = props[r.name];
       if (!p) continue;
-      p.description = r.description;
+      p.description = toolTextForSave(r.description, String(p.description ?? ""), locale);
       if (r.scalar) {
         const dv = coerceDefault(r.type, r.defaultStr);
         if (dv === undefined) delete p.default;
@@ -141,12 +143,16 @@ function ToolEditor({
   onClose: () => void;
 }) {
   const t = useTranslations("toolsPage");
+  const locale = useLocale();
+  const agentLabels = useAgentLabels();
   // traffic tools can't be bound/enabled until the global 流量捕获 switch is on.
   const trafficGated = TRAFFIC_TOOL_KEYS.has(tool.key) && !captureOn;
-  const [description, setDescription] = React.useState(tool.description);
+  const [description, setDescription] = React.useState(() => toolText(tool.description, locale));
   const [bound, setBound] = React.useState<string[]>(tool.agents);
   const [enabled, setEnabled] = React.useState(tool.enabled);
-  const [rows, setRows] = React.useState<ParamRow[]>(() => toRows(tool.schema));
+  const [rows, setRows] = React.useState<ParamRow[]>(() =>
+    toRows(tool.schema).map((row) => ({ ...row, description: toolText(row.description, locale) })),
+  );
   const [saving, setSaving] = React.useState(false);
 
   const setRow = (i: number, patch: Partial<ParamRow>) =>
@@ -157,8 +163,8 @@ function ToolEditor({
     setSaving(true);
     try {
       await api.saveTool(tool.key, {
-        description,
-        schema: applyRows(tool.schema, rows),
+        description: toolTextForSave(description, tool.description, locale),
+        schema: applyRows(tool.schema, rows, locale),
         agents: bound,
         enabled,
       });
@@ -202,7 +208,7 @@ function ToolEditor({
                     disabled={trafficGated}
                     onCheckedChange={() => toggleAgent(ag.key)}
                   />
-                  {ag.name}
+                  {agentLabels.name(ag)}
                   <span className="text-muted-foreground font-mono text-xs">{ag.key}</span>
                 </label>
               ))}
@@ -293,6 +299,7 @@ function ToolEditor({
 // ToolGridCard is one clickable tile in the catalog grid.
 function ToolGridCard({ tool, onClick }: { tool: Tool; onClick: () => void }) {
   const t = useTranslations("toolsPage");
+  const locale = useLocale();
   return (
     <button
       type="button"
@@ -328,7 +335,9 @@ function ToolGridCard({ tool, onClick }: { tool: Tool; onClick: () => void }) {
           {t("callsBadge", { count: tool.calls ?? 0 })}
         </Badge>
       </div>
-      <p className="text-muted-foreground line-clamp-1 h-4 text-xs">{tool.description || t("noDescription")}</p>
+      <p className="text-muted-foreground line-clamp-1 h-4 text-xs">
+        {toolText(tool.description, locale, tool.system) || t("noDescription")}
+      </p>
       <div className="mt-auto flex flex-wrap gap-1 pt-1">
         {tool.agents.length === 0 && <span className="text-muted-foreground text-[10px]">{t("noBoundAgents")}</span>}
         {tool.agents.map((a) => (
@@ -343,6 +352,7 @@ function ToolGridCard({ tool, onClick }: { tool: Tool; onClick: () => void }) {
 
 export default function ToolsPage() {
   const t = useTranslations("toolsPage");
+  const locale = useLocale();
   const [tools, setTools] = React.useState<Tool[]>([]);
   const [agents, setAgents] = React.useState<Agent[]>([]);
   const [captureOn, setCaptureOn] = React.useState(false);
@@ -381,10 +391,11 @@ export default function ToolsPage() {
       return (
         t.key.toLowerCase().includes(q) ||
         t.description.toLowerCase().includes(q) ||
+        toolText(t.description, locale, t.system).toLowerCase().includes(q) ||
         t.agents.some((a) => a.toLowerCase().includes(q))
       );
     },
-    [query],
+    [query, locale],
   );
   const systemTools = tools.filter((t) => t.system && matchTool(t));
   const customTools = tools.filter((t) => !t.system && matchTool(t));
@@ -486,7 +497,7 @@ export default function ToolsPage() {
                 <SheetDescription>{t("editSheetDesc")}</SheetDescription>
               </SheetHeader>
               <ToolEditor
-                key={selected.key}
+                key={`${selected.key}:${locale}`}
                 tool={selected}
                 agents={agents}
                 captureOn={captureOn}
@@ -537,6 +548,7 @@ function CustomToolDialog({
   onSaved: () => void;
 }) {
   const t = useTranslations("toolsPage");
+  const agentLabels = useAgentLabels();
   const isNew = edit === "new";
   const tool = edit && edit !== "new" ? edit : null;
   const [key, setKey] = React.useState("");
@@ -892,7 +904,7 @@ function CustomToolDialog({
               {agents.map((a) => (
                 <label key={a.key} className="flex items-center gap-2 text-sm">
                   <Checkbox checked={bound.includes(a.key)} onCheckedChange={() => toggleAgent(a.key)} />
-                  {a.name}
+                  {agentLabels.name(a)}
                   <span className="text-muted-foreground font-mono text-xs">{a.key}</span>
                 </label>
               ))}

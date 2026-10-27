@@ -14,7 +14,7 @@ import {
   Trash2Icon,
   UploadIcon,
 } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
 
 import {
@@ -38,7 +38,9 @@ import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { getDateLocale } from "@/i18n/datetime";
+import { useAgentLabels } from "@/lib/agent-i18n";
 import { ApiError, api } from "@/lib/api";
+import { skillDescription } from "@/lib/skill-i18n";
 import type { Agent, MCPServer, MissingSkill, SkillCall, SkillItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -304,6 +306,8 @@ function SkillsOverview({
 export default function SkillsPage() {
   const t = useTranslations("skillsPage");
   const [skills, setSkills] = React.useState<SkillItem[]>([]);
+  const locale = useLocale();
+  const labels = useAgentLabels();
   const [agents, setAgents] = React.useState<Agent[]>([]);
   const [selected, setSelected] = React.useState<Selected | null>(null);
   const [visibility, setVisibility] = React.useState<Record<string, string[]>>({});
@@ -1016,7 +1020,9 @@ export default function SkillsPage() {
               <div>
                 <h2 className="font-mono text-base font-semibold">{selectedSkill.name}</h2>
                 {selectedSkill.description && (
-                  <p className="mt-1 text-sm text-muted-foreground">{selectedSkill.description}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {skillDescription(selectedSkill.description, locale)}
+                  </p>
                 )}
                 <div className="mt-2 flex flex-wrap gap-2">
                   {selectedSkill.license && (
@@ -1130,9 +1136,9 @@ export default function SkillsPage() {
                         <label key={a.key} className="flex cursor-pointer items-center gap-2 text-sm">
                           <Checkbox
                             checked={(visibility[selectedSkill.name] ?? []).includes(a.id)}
-                            onCheckedChange={() => toggleVisibility(selectedSkill.name, a.id, a.name)}
+                            onCheckedChange={() => toggleVisibility(selectedSkill.name, a.id, labels.name(a))}
                           />
-                          {a.name}
+                          {labels.name(a)}
                         </label>
                       ))}
                       {agents.length === 0 && <span className="text-xs text-muted-foreground">{t("noAgents")}</span>}
@@ -1333,7 +1339,7 @@ export default function SkillsPage() {
                           setNewVisibility((cur) => (on ? [...cur, a.id] : cur.filter((id) => id !== a.id)))
                         }
                       />
-                      {a.name}
+                      {labels.name(a)}
                     </label>
                   ))}
                 </div>

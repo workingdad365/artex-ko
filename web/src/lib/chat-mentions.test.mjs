@@ -17,6 +17,9 @@ test("categories, Chinese aliases, IP and keyword search", () => {
   assert.equal(mentionSearch("ip 192.0.2.1").kind, "ip");
   assert.equal(mentionSearch("接口 GET /api").query, "GET /api");
   assert.equal(mentionSearch("acme.com").kind, "");
+  assert.equal(mentionSearch("취약점 SQLi").kind, "finding");
+  assert.equal(mentionSearch("엔드포인트 GET /api").query, "GET /api");
+  assert.equal(selectedMentions("@[漏洞#12 원본] @[취약점#12 번역]")[1].kind, "finding");
 });
 
 test("tokens roundtrip labels and removing one reference preserves its neighbors", () => {
@@ -27,7 +30,9 @@ test("tokens roundtrip labels and removing one reference preserves its neighbors
   assert.equal(selected.length, 2);
   assert.equal(selected[0].kind, "finding");
   assert.equal(selected[0].id, "12");
-  assert.equal(selected[0].text, "标题（1） 描述");
+  assert.equal(selected[0].text, "标题(1) 描述");
+  assert.ok(first.startsWith("@[취약점#12 "));
+  assert.ok(mentionToken({ kind: "finding", id: 12, label: "원본", description: "" }, "zh").startsWith("@[漏洞#12 "));
   assert.equal(selected[1].kind, "ip");
   const next = value.slice(0, selected[0].start) + value.slice(selected[0].start + selected[0].token.length);
   assert.equal(selectedMentions(next)[0].token, second);

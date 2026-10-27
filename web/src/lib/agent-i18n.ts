@@ -5,12 +5,8 @@ import { useTranslations } from "next-intl";
 import { api } from "@/lib/api";
 import type { Agent } from "@/lib/types";
 
-// 기본 에이전트(builtin)의 이름·설명·프롬프트 변수 라벨은 DB 시드 데이터라
-// 중국어로만 들어 있다(db/db.go 의 builtinAgents, server/finding_retests.go 의
-// 漏洞复测 에이전트). DB 값을 언어별로 둘 수 없고 시드가 ON CONFLICT DO NOTHING 이라
-// 이미 설치된 인스턴스에는 반영되지도 않으므로, 화면에서는 key 로 메시지 파일
-// (web/messages/{ko,en,zh,es,ja}.json 의 builtinAgents 네임스페이스)에서 번역을 찾아
-// 보여 주고, 없으면 DB 값을 그대로 쓴다. 사용자가 만든 에이전트는 항상 DB 값.
+// 기본 에이전트의 표시 문구는 builtinAgents 메시지에서 현재 언어로 조회한다.
+// DB의 기본 문구는 한국어로 마이그레이션하며 사용자 정의 에이전트는 DB 값을 사용한다.
 
 // retester 는 DB 에 builtin=false 로 시드되지만(server FindingRetestAgentKey) 시스템이
 // 심은 고정 key 라 번역 대상에 포함한다. builtin=true 인 에이전트(goals/planner/

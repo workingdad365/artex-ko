@@ -836,7 +836,7 @@ function ChatView({
         <div className="min-w-0 max-w-full px-4 py-3" ref={contentRef}>
           {messages.length === 0 && !running ? (
             <div className="text-muted-foreground py-10 text-center text-sm">
-              {t("emptyStart", { agent: agent?.name ?? conv.agent_key })}
+              {t("emptyStart", { agent: agent ? convLabels.name(agent) : conv.agent_key })}
             </div>
           ) : (
             <>
@@ -921,6 +921,7 @@ const ConversationItem = React.memo(function ConversationItem({
 }) {
   const t = useTranslations("chat");
   const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const labels = useAgentLabels();
   const renameInputRef = React.useRef<HTMLInputElement>(null);
   const cancelRenameRef = React.useRef(false);
   const pinned = conversationIsPinned(conv);
@@ -987,7 +988,7 @@ const ConversationItem = React.memo(function ConversationItem({
             {showAgent && (
               <>
                 <Bot className="size-3 shrink-0" />
-                <span className="min-w-0 truncate">{agent?.name ?? conv.agent_key}</span>
+                <span className="min-w-0 truncate">{agent ? labels.name(agent) : conv.agent_key}</span>
                 <span className="shrink-0">·</span>
               </>
             )}

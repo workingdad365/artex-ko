@@ -3,7 +3,7 @@
 import * as React from "react";
 
 import { AtSignIcon, ChevronRightIcon, Loader2Icon, XIcon } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
 import { InputGroupTextarea } from "@/components/ui/input-group";
@@ -21,6 +21,7 @@ type Props = Omit<React.ComponentProps<"textarea">, "value" | "onChange" | "ref"
 
 export function MentionTextarea({ value, onValueChange, onKeyDown, className, inputGroup, disabled, ...props }: Props) {
   const t = useTranslations("mentionTextarea");
+  const locale = useLocale();
   const textarea = React.useRef<HTMLTextAreaElement>(null);
   const composing = React.useRef(false);
   const pendingKeyboardIndex = React.useRef<number | null>(null);
@@ -141,7 +142,7 @@ export function MentionTextarea({ value, onValueChange, onKeyDown, className, in
 
   function choose(index: number) {
     if (categories[index]) replaceActive(`@${categories[index].label} `, false);
-    else if (items[index]) replaceActive(`${mentionToken(items[index])} `, true);
+    else if (items[index]) replaceActive(`${mentionToken(items[index], locale)} `, true);
   }
 
   function keyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {

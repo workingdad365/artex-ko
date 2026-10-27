@@ -1,0 +1,4 @@
+{
+  "收集网站API接口时调用该skill。": "웹사이트의 API 엔드포인트를 수집할 때 사용하는 스킬입니다.",
+  "通过 ScopeSentry MCP 管理安全扫描平台（项目、任务、模板、资产、节点）。在用户提到 ScopeSentry、MCP、API Key、扫描任务、资产查询时使用。": "ScopeSentry MCP로 보안 스캔 플랫폼의 프로젝트, 작업, 템플릿, 자산, 노드를 관리합니다. ScopeSentry 연결, API Key, 스캔 작업, 자산 조회 시 사용합니다."
+}
