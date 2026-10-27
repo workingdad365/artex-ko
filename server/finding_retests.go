@@ -18,13 +18,8 @@ import (
 	actool "github.com/Autumn-27/norma/tool"
 )
 
-// 사용자 노출 HTTP 에러 응답 문구. 아래 네 문구는 startFindingRetest HTTP 핸들러에서만
-// 반환되고 에이전트 도구 경로(findingRetestTools 의 roTool/wrTool 설명·파라미터 설명·
-// actool.Errorf)에는 닿지 않으므로 한국어로 번역한다. 반대로 도구 설명
-// (get_finding_retest_context·record_finding_retest_result)·파라미터 설명·
-// actool.Errorf(153행 회차 미연결 안내)와 seedFindingRetester 의 DB 시드 에이전트
-// 이름(漏洞复测)·프로필·note(内置默认)는 에이전트가 읽는 두뇌 입력이거나 시드라
-// 원문을 보존한다(각 지점 주석 참조, F16 두뇌 경계 계열).
+// HTTP/도구 오류와 기본 데이터의 표시 문구는 한국어로 제공한다.
+// 모델용 도구 정의는 원문을 유지하고 웹 카탈로그에서 표시용 번역을 적용한다.
 const (
 	errFindingRetestNotesTooLong    = "재검증 보충 설명은 최대 4000자까지 입력할 수 있습니다"
 	errFindingRetestAgentMissing    = "취약점 재검증 에이전트가 없거나 비활성화되어 있습니다. 에이전트 관리에서 retester 를 설정하세요"
@@ -164,7 +159,7 @@ func (s *Server) findingRetestTools() []actool.CoreTool {
 					return actool.Errorf(err.Error()), nil
 				}
 				if r == nil {
-					return actool.Errorf("当前会话未关联复测记录，请从漏洞详情发起复测"), nil
+					return actool.Errorf("현재 대화에 재검증 기록이 연결되지 않았습니다. 취약점 상세에서 재검증을 시작해야 합니다"), nil
 				}
 				var constraints []db.Constraint
 				f, err := s.m.pg.GetFinding(r.FindingID)
@@ -229,11 +224,18 @@ func (s *Server) seedFindingRetester() error {
 		return err
 	}
 	if done == "true" {
-		return nil
+		if _, err = tx.Exec(`UPDATE agents SET
+			name=CASE WHEN name='漏洞复测' THEN '취약점 재검증' ELSE name END,
+			description=CASE WHEN description='从漏洞详情手动启动，读取原证据并保存独立复测结论。'
+			THEN '취약점 상세에서 수동으로 시작하여 원본 증거를 읽고 독립적인 재검증 결론을 저장합니다.' ELSE description END
+			WHERE key=$1 AND (name='漏洞复测' OR description='从漏洞详情手动启动，读取原证据并保存独立复测结论。')`, db.FindingRetestAgentKey); err != nil {
+			return err
+		}
+		return tx.Commit()
 	}
 	var id int64
 	err = tx.QueryRow(`INSERT INTO agents(key,name,description,role,builtin,enabled)
-	VALUES ($1,'漏洞复测','从漏洞详情手动启动，读取原证据并保存独立复测结论。','assistant',false,true)
+	VALUES ($1,'취약점 재검증','취약점 상세에서 수동으로 시작하여 원본 증거를 읽고 독립적인 재검증 결론을 저장합니다.','assistant',false,true)
 	ON CONFLICT (key) DO NOTHING RETURNING id`, db.FindingRetestAgentKey).Scan(&id)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
@@ -241,7 +243,7 @@ func (s *Server) seedFindingRetester() error {
 	if id > 0 {
 		var pid int64
 		if err = tx.QueryRow(`INSERT INTO agent_prompts(agent_id,version,template_text,note,updated_by)
-		VALUES ($1,1,$2,'内置默认','system') RETURNING id`, id, agent.RetesterDefaultPrompt).Scan(&pid); err != nil {
+		VALUES ($1,1,$2,'내장 기본값','system') RETURNING id`, id, agent.RetesterDefaultPrompt).Scan(&pid); err != nil {
 			return err
 		}
 		if _, err = tx.Exec(`UPDATE agents SET current_prompt_id=$1 WHERE id=$2`, pid, id); err != nil {

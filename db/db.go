@@ -221,8 +221,8 @@ func (d *DB) seedBuiltins() error {
 		err := d.QueryRow(`
 INSERT INTO agents(key, name, description, role, builtin, enabled, interactive_shell, run_seconds)
 VALUES ($1, $2, NULLIF($3,''), $4, true, true, $5, COALESCE($6, 1200))
-ON CONFLICT (key) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description
-RETURNING id`, a.key, a.name, a.desc, a.role, a.interactiveShell, a.runSeconds).Scan(&agentID)
+ON CONFLICT (key) DO UPDATE SET key = EXCLUDED.key
+RETURNING id`, a.key, builtinText(a.name), builtinText(a.desc), a.role, a.interactiveShell, a.runSeconds).Scan(&agentID)
 		if err != nil {
 			return fmt.Errorf("agent %s: %w", a.key, err)
 		}
@@ -230,9 +230,8 @@ RETURNING id`, a.key, a.name, a.desc, a.role, a.interactiveShell, a.runSeconds).
 			if _, err := d.Exec(`
 INSERT INTO agent_prompt_vars(agent_id, var_name, description, example, source)
 VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (agent_id, var_name) DO UPDATE
-  SET description = EXCLUDED.description, example = EXCLUDED.example, source = EXCLUDED.source`,
-				agentID, v.name, v.desc, v.example, v.source); err != nil {
+ON CONFLICT (agent_id, var_name) DO NOTHING`,
+				agentID, v.name, builtinText(v.desc), builtinText(v.example), v.source); err != nil {
 				return fmt.Errorf("agent %s var %s: %w", a.key, v.name, err)
 			}
 		}
@@ -283,7 +282,7 @@ ON CONFLICT (name) DO NOTHING`,
 	if err := d.seedDefaultAssetInterceptRules(); err != nil {
 		return fmt.Errorf("seed asset intercept rules: %w", err)
 	}
-	return nil
+	return d.localizeBuiltinText()
 }
 
 // seedDefaultAssetInterceptRules inserts the built-in asset blocklist (fuzzy
@@ -308,7 +307,7 @@ func (d *DB) seedDefaultAssetInterceptRules() error {
 		if _, err := d.Exec(`
 INSERT INTO asset_intercept_rules(enabled, kind, pattern, note, builtin)
 VALUES (true, $1, $2, $3, true)
-ON CONFLICT DO NOTHING`, r.kind, r.pattern, r.note); err != nil {
+ON CONFLICT DO NOTHING`, r.kind, r.pattern, builtinText(r.note)); err != nil {
 			return fmt.Errorf("asset rule %q: %w", r.pattern, err)
 		}
 	}
@@ -526,7 +525,7 @@ func (d *DB) seedDefaultInterceptRules() error {
 INSERT INTO intercept_rules(name, enabled, priority, match_target, match_type, pattern, action, message, timeout_enabled, timeout_seconds, timeout_action)
 VALUES ($1, true, $2, $3, $4, $5, $6, $7, false, 60, 'deny')
 ON CONFLICT DO NOTHING`,
-			r.name, r.priority, r.target, r.typ, r.pattern, r.action, r.message,
+			builtinText(r.name), r.priority, r.target, r.typ, r.pattern, r.action, builtinText(r.message),
 		); err != nil {
 			return fmt.Errorf("rule %q: %w", r.name, err)
 		}
@@ -575,7 +574,7 @@ func (d *DB) seedDefaultInterceptRulesV2() error {
 INSERT INTO intercept_rules(name, enabled, priority, match_target, match_type, pattern, action, message, timeout_enabled, timeout_seconds, timeout_action)
 VALUES ($1, $2, $3, 'tool_input', 'regex', $4, $5, $6, false, 60, 'deny')
 ON CONFLICT DO NOTHING`,
-			r.name, r.enabled, r.priority, r.pattern, r.action, r.message,
+			builtinText(r.name), r.enabled, r.priority, r.pattern, r.action, builtinText(r.message),
 		); err != nil {
 			return fmt.Errorf("rule %q: %w", r.name, err)
 		}
@@ -608,9 +607,9 @@ func (d *DB) seedDefaultInterceptRulesV3() error {
 INSERT INTO intercept_rules(name, enabled, priority, match_target, match_type, pattern, action, message, timeout_enabled, timeout_seconds, timeout_action)
 SELECT $1, true, 80, 'tool_input', 'regex', $2, 'deny', $3, false, 60, 'deny'
 WHERE NOT EXISTS (SELECT 1 FROM intercept_rules WHERE name = $1)`,
-		name,
+		builtinText(name),
 		deleteEndpointPathPattern,
-		"禁止调用删除类接口（/delete /remove /unlink /erase 等），不论使用哪种 HTTP 方法——多数应用的删除接口用 GET/POST 就能触发，同样会真实删除目标数据",
+		builtinText("禁止调用删除类接口（/delete /remove /unlink /erase 等），不论使用哪种 HTTP 方法——多数应用的删除接口用 GET/POST 就能触发，同样会真实删除目标数据"),
 	); err != nil {
 		return fmt.Errorf("rule %q: %w", name, err)
 	}
