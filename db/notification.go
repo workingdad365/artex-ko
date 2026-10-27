@@ -225,19 +225,19 @@ func (d *DB) DeleteNotificationChannel(ctx context.Context, id int64) error {
 func RecordNotificationEventTx(ctx context.Context, tx *sql.Tx, kind string, findingID int64, snap notify.Snapshot) bool {
 	raw, err := json.Marshal(snap)
 	if err != nil {
-		log.Printf("[notify] 序列化推送事件失败 finding=%d: %v", findingID, err)
+		log.Printf("[notify] 알림 이벤트 직렬화 실패 finding=%d: %v", findingID, err)
 		return false
 	}
 	if _, err := tx.ExecContext(ctx, `SAVEPOINT notify_event`); err != nil {
-		log.Printf("[notify] 建立保存点失败 finding=%d: %v", findingID, err)
+		log.Printf("[notify] 저장점 생성 실패 finding=%d: %v", findingID, err)
 		return false
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO notification_events(kind,finding_id,snapshot) VALUES($1,$2,$3)`,
 		kind, findingID, string(raw)); err != nil {
-		log.Printf("[notify] 写入推送事件失败 finding=%d（漏洞记录不受影响）: %v", findingID, err)
+		log.Printf("[notify] 알림 이벤트 저장 실패 finding=%d (취약점 기록에는 영향 없음): %v", findingID, err)
 		// 回滚到保存点，把事务从 aborted 状态里救回来。
 		if _, rbErr := tx.ExecContext(ctx, `ROLLBACK TO SAVEPOINT notify_event`); rbErr != nil {
-			log.Printf("[notify] 回滚到保存点失败 finding=%d: %v", findingID, rbErr)
+			log.Printf("[notify] 저장점으로 롤백 실패 finding=%d: %v", findingID, rbErr)
 		}
 		return false
 	}

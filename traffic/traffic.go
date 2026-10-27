@@ -278,13 +278,13 @@ func (t *Traffic) initIndex() error {
 	}
 	t.incrementalVacuum = mode == autoVacuumIncremental
 	if !t.incrementalVacuum {
-		log.Printf("[traffic] 索引库未启用增量回收（auto_vacuum=%d）：删除流量不会缩小 index.sqlite，需要执行一次存储压缩来转换", mode)
+		log.Printf("[traffic] 인덱스 DB의 점진적 공간 회수 비활성화(auto_vacuum=%d): 트래픽을 삭제해도 index.sqlite 크기가 줄지 않으므로 저장소 압축을 한 번 실행해 전환해야 함", mode)
 	}
 	if _, err := conn.ExecContext(ctx, indexSchema); err != nil {
 		return err
 	}
 	if _, err := conn.ExecContext(ctx, ftsSchema); err != nil {
-		log.Printf("[traffic] 全文索引不可用，正文搜索将被禁用（元数据搜索不受影响）：%v", err)
+		log.Printf("[traffic] 전문 인덱스를 사용할 수 없어 본문 검색 비활성화(메타데이터 검색에는 영향 없음): %v", err)
 		return nil
 	}
 	t.fts = true
@@ -414,7 +414,7 @@ func (t *Traffic) maybePassthrough(f *mproxy.Flow, err error) {
 		return
 	}
 	if _, loaded := t.pass.LoadOrStore(host, struct{}{}); !loaded {
-		log.Printf("[traffic] 与 %s 的 MITM 出错，改为透传（该 host 后续直连目标、不再记录，但请求照常）：%v", host, err)
+		log.Printf("[traffic] %s와의 MITM 오류로 직접 전달로 전환(이후 해당 host에 직접 연결하며 기록은 중단하지만 요청은 정상 처리): %v", host, err)
 	}
 }
 
@@ -456,7 +456,7 @@ func (t *Traffic) record(f *mproxy.Flow) {
 
 	tx, err := t.db.Begin()
 	if err != nil {
-		log.Printf("[traffic] 记录 %s 失败（开启事务）：%v", url, err)
+		log.Printf("[traffic] %s 기록 실패(트랜잭션 시작): %v", url, err)
 		return
 	}
 	defer tx.Rollback() //nolint:errcheck // no-op once committed
@@ -468,19 +468,19 @@ VALUES(?,?,?,?,?,?,?,?,?,?,'')`,
 		id, now.Unix(), host, method, tmpl, url, f.Response.StatusCode, ct,
 		len(f.Request.Body), len(f.Response.Body))
 	if err != nil {
-		log.Printf("[traffic] 记录 %s 失败（写索引）：%v", url, err)
+		log.Printf("[traffic] %s 기록 실패(인덱스 저장): %v", url, err)
 		return
 	}
 	rowid, err := res.LastInsertId()
 	if err != nil {
-		log.Printf("[traffic] 记录 %s 失败（取 rowid）：%v", url, err)
+		log.Printf("[traffic] %s 기록 실패(rowid 조회): %v", url, err)
 		return
 	}
 
 	if _, err := tx.Exec(`INSERT OR REPLACE INTO exchange_bodies(id,req_head,req_body,req_blob,resp_head,resp_body,resp_blob)
 VALUES(?,?,?,?,?,?,?)`,
 		id, reqHead, reqB.inline, nullIfEmpty(reqB.hash), respHead, respB.inline, nullIfEmpty(respB.hash)); err != nil {
-		log.Printf("[traffic] 记录 %s 失败（写正文）：%v", url, err)
+		log.Printf("[traffic] %s 기록 실패(본문 저장): %v", url, err)
 		return
 	}
 
@@ -489,7 +489,7 @@ VALUES(?,?,?,?,?,?,?)`,
 			continue
 		}
 		if _, err := tx.Exec(`INSERT OR IGNORE INTO blob_refs(hash,exchange_id) VALUES(?,?)`, h, id); err != nil {
-			log.Printf("[traffic] 记录 %s 失败（登记 blob 引用）：%v", url, err)
+			log.Printf("[traffic] %s 기록 실패(blob 참조 등록): %v", url, err)
 			return
 		}
 	}
@@ -499,13 +499,13 @@ VALUES(?,?,?,?,?,?,?)`,
 		// fully searchable even though only its preview is stored inline.
 		idx := strings.Join([]string{url, reqHead, reqB.index, respHead, respB.index}, "\n")
 		if _, err := tx.Exec(`INSERT INTO ex_fts(rowid,content) VALUES(?,?)`, rowid, idx); err != nil {
-			log.Printf("[traffic] 记录 %s 失败（写全文索引）：%v", url, err)
+			log.Printf("[traffic] %s 기록 실패(전문 인덱스 저장): %v", url, err)
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		log.Printf("[traffic] 记录 %s 失败（提交）：%v", url, err)
+		log.Printf("[traffic] %s 기록 실패(커밋): %v", url, err)
 	}
 }
 
@@ -544,13 +544,13 @@ func (t *Traffic) spill(body []byte, contentType string) storedBody {
 	// the store only ever holds bodies above maxInlineBody, deduplicated by hash.
 	blobDir := filepath.Join(t.dir, "_blobs", "sha256", h[:2])
 	if err := os.MkdirAll(blobDir, 0o755); err != nil {
-		log.Printf("[traffic] 创建 blob 目录失败：%v", err)
+		log.Printf("[traffic] blob 디렉터리 생성 실패: %v", err)
 		return storedBody{inline: clipBytes(body, blobPreview), index: indexText()}
 	}
 	blobPath := filepath.Join(blobDir, h+".bin")
 	if _, err := os.Stat(blobPath); os.IsNotExist(err) {
 		if err := os.WriteFile(blobPath, body, 0o644); err != nil {
-			log.Printf("[traffic] 写 blob %s 失败：%v", h, err)
+			log.Printf("[traffic] blob %s 저장 실패: %v", h, err)
 			return storedBody{inline: clipBytes(body, blobPreview), index: indexText()}
 		}
 	}
@@ -1112,7 +1112,7 @@ func (t *Traffic) DeleteAll() (deleted int64, reclaimed int64, err error) {
 	if err := t.compactIndex(); err != nil {
 		// The deletion is already durable; compaction is disk space, not
 		// correctness, so it must not turn a completed purge into a failed one.
-		log.Printf("[traffic] 压实索引失败：%v", err)
+		log.Printf("[traffic] 인덱스 압축 실패: %v", err)
 		return deleted, 0, nil
 	}
 	return deleted, before - t.indexBytes(), nil
@@ -1360,7 +1360,7 @@ func (t *Traffic) reapStage(stageDir string) {
 	}
 	t.reaping.Go(func() {
 		if err := os.RemoveAll(stageDir); err != nil {
-			log.Printf("[traffic] 清理历史流量目录 %s 失败：%v", stageDir, err)
+			log.Printf("[traffic] 이전 트래픽 디렉터리 %s 정리 실패: %v", stageDir, err)
 		}
 	})
 }
@@ -1714,7 +1714,7 @@ func (t *Traffic) reclaim() {
 		ctx := context.Background()
 		conn, err := t.db.Conn(ctx)
 		if err != nil {
-			log.Printf("[traffic] 回收索引空间失败（获取连接）：%v", err)
+			log.Printf("[traffic] 인덱스 공간 회수 실패(연결 획득): %v", err)
 			return
 		}
 		defer conn.Close()
@@ -1725,7 +1725,7 @@ func (t *Traffic) reclaim() {
 			progressed, err := t.reclaimChunk(ctx, conn, &merges)
 			t.wmu.Unlock()
 			if err != nil {
-				log.Printf("[traffic] 回收索引空间失败：%v", err)
+				log.Printf("[traffic] 인덱스 공간 회수 실패: %v", err)
 				return
 			}
 			if !progressed {
@@ -1735,11 +1735,11 @@ func (t *Traffic) reclaim() {
 				return // shutdown must not wait out the remaining budget
 			}
 			if step+1 >= reclaimMaxSteps {
-				log.Printf("[traffic] 索引空间回收未做完（已用满 %d 步上限），下次删除时继续", reclaimMaxSteps)
+				log.Printf("[traffic] 인덱스 공간 회수 미완료(%d단계 한도 도달), 다음 삭제 시 계속 진행함", reclaimMaxSteps)
 				return
 			}
 			if time.Now().After(deadline) {
-				log.Printf("[traffic] 索引空间回收未做完（已用满 %s 预算），下次删除时继续", reclaimBudget)
+				log.Printf("[traffic] 인덱스 공간 회수 미완료(%s 제한 시간 소진), 다음 삭제 시 계속 진행함", reclaimBudget)
 				return
 			}
 		}
@@ -1749,7 +1749,7 @@ func (t *Traffic) reclaim() {
 		t.wmu.Lock()
 		defer t.wmu.Unlock()
 		if _, err := conn.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
-			log.Printf("[traffic] 截断 WAL 失败：%v", err)
+			log.Printf("[traffic] WAL 잘라내기 실패: %v", err)
 		}
 	})
 }

@@ -632,11 +632,11 @@ LIMIT $1`, malformedIPAssetsSampled)
 		return "", nil
 	}
 	warning := fmt.Sprintf(
-		"%d 条资产的 ip 字段不是合法 IP，已跳过 IP/CIDR 范围匹配（这些资产不会被网段规则归属到企业）：%s",
-		total, strings.Join(samples, "、"),
+		"자산 %d개의 ip 필드가 유효한 IP가 아니어서 IP/CIDR 범위 매칭을 건너뜀(해당 자산은 네트워크 대역 규칙으로 기업에 귀속되지 않음): %s",
+		total, strings.Join(samples, ", "),
 	)
 	if total > len(samples) {
-		warning += fmt.Sprintf(" 等 %d 条", total)
+		warning += fmt.Sprintf(" 등 총 %d건", total)
 	}
 	return warning, nil
 }

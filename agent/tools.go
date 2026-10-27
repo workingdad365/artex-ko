@@ -150,9 +150,9 @@ type WriteCounts struct {
 // "explored but persisted nothing" signal (Total == 0).
 func (w WriteCounts) Total() int { return w.Facts + w.Assets + w.Findings }
 
-// String renders the per-kind breakdown for logs, e.g. "事实1 资产25 漏洞0".
+// String은 로그에 사용할 종류별 저장 건수를 표시함.
 func (w WriteCounts) String() string {
-	return fmt.Sprintf("事实%d 资产%d 漏洞%d", w.Facts, w.Assets, w.Findings)
+	return fmt.Sprintf("사실 %d건 자산 %d건 취약점 %d건", w.Facts, w.Assets, w.Findings)
 }
 
 // Writes reports what this run wrote back, split by node kind (so the engine can
